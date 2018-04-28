@@ -68,8 +68,8 @@ def bfs(img,vis):
     return
 
 def img_resize(img):
-    img = cv2.adaptiveThreshold(img,255,cv2.ADAPTIVE_THRESH_MEAN_C, cv2.THRESH_BINARY,31,7) # 二值化
-    img= cv2.medianBlur(img,17) # 去噪
+    img = cv2.adaptiveThreshold(img,255,cv2.ADAPTIVE_THRESH_MEAN_C, cv2.THRESH_BINARY,75,25) # 二值化
+    img= cv2.medianBlur(img,3) # 去噪
     x_size = img.shape[0]
     y_size = img.shape[1]
     visit = [[0 for y in range(y_size)] for x in range(x_size)]
