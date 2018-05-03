@@ -3,6 +3,7 @@
 import cv2
 import queue
 import numpy
+from pylab import *
 import tensorflow as tf
 from tensorflow.examples.tutorials.mnist import input_data
 
@@ -138,8 +139,8 @@ for i in range(img.shape[0]):# 广搜
             mnist_array = numpy.reshape(mnist_img, (1, 784))
             mnist_array = mnist_array.astype(numpy.float32)
             result = tf.arg_max(y,1)  # 计算数字概率
-            print(sess.run(y, feed_dict={x: mnist_array}))
-            print(sess.run(result, feed_dict={x: mnist_array}))
+            cal_y = sess.run(y, feed_dict={x: mnist_array})
+            cal_re = sess.run(result, feed_dict={x: mnist_array})
             # 画边框
             boxj = box[2]
             while (boxj <= box[3]):
@@ -155,5 +156,10 @@ for i in range(img.shape[0]):# 广搜
                 origin_img[boxi, box[2] + 1] = (0, 0, 255)
                 origin_img[boxi, box[3] - 1] = (0, 0, 255)
                 boxi = boxi + 1
+            #写数字
+            str = "%s:"%cal_re[0]
+            str = str + "%.5f"%cal_y[0][cal_re[0]]
+            font = cv2.FONT_HERSHEY_SIMPLEX  # 使用默认字体
+            origin_img = cv2.putText(origin_img, str, (box[3], box[1]), font, 0.8, 0, 2)
 cv2.imwrite("3.jpg",origin_img)
 print("finish detect")
