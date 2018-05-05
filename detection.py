@@ -42,7 +42,7 @@ correct_prediction = tf.equal(tf.argmax(y, 1), tf.argmax(y_, 1))
 accuracy = tf.reduce_mean(tf.cast(correct_prediction, tf.float32))
 keep_prob = tf.placeholder(tf.float32)
 # 训练过程
-for i in range(5000):
+for i in range(10000):
     batch_x, batch_y = mnist.train.next_batch(50)
     sess.run(train_step, feed_dict={x: batch_x, y_: batch_y})
 # 使用测试集评估准确率
@@ -130,7 +130,7 @@ for i in range(img.shape[0]):# 广搜
                         simple_img[i+bias,j] = 255-img[i+box[0],j+box[2]]
             #机器学习模型尝试
             simple_img = cv2.resize(simple_img, (28, 28))
-            # cv2.imwrite("./data/%s.jpg"%cnt,simple_img)
+            cv2.imwrite("./data/%s.jpg"%cnt,simple_img)
             cnt=cnt+1
             mnist_img = numpy.zeros((28, 28))
             for i in range(28):
@@ -139,7 +139,8 @@ for i in range(img.shape[0]):# 广搜
             mnist_array = numpy.reshape(mnist_img, (1, 784))
             mnist_array = mnist_array.astype(numpy.float32)
             result = tf.arg_max(y,1)  # 计算数字概率
-            cal_y = sess.run(y, feed_dict={x: mnist_array})
+            prob = tf.nn.softmax(y)
+            cal_y = sess.run(prob, feed_dict={x: mnist_array})
             cal_re = sess.run(result, feed_dict={x: mnist_array})
             # 画边框
             boxj = box[2]
