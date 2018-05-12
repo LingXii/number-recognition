@@ -57,6 +57,7 @@ print(sess.run(accuracy, feed_dict={x: mnist.test.images,
 
 # image deal
 q = queue.Queue() # 广搜队列
+buf = queue.Queue() # 缓冲队列
 
 def bfs(img,vis):
     x_size = img.shape[0]
@@ -67,10 +68,9 @@ def bfs(img,vis):
     dowm_border = first[0]
     right_border = first[1]
     q.put(first)
-    count=0 #像素计数
     while(not q.empty()):
-        count=count+1
         p = q.get()
+        buf.put(p)  # 将广搜得到的像素点放入缓冲区，等待切分
         if(p[0]>dowm_border): dowm_border=p[0]
         if(p[1]>right_border): right_border=p[1]
         if(p[0]<up_border):
@@ -106,42 +106,113 @@ x_size = img.shape[0]
 y_size = img.shape[1]
 visit = [[0 for y in range(y_size)] for x in range(x_size)]
 cnt=0
-for i in range(img.shape[0]):# 广搜
-    for j in range(img.shape[1]):
+for j in range(img.shape[1]):# 广搜
+    for i in range(img.shape[0]):
         if (visit[i][j]==0 and img[i, j] < 30):
             visit[i][j]=1
             q.put((i,j));
             box = bfs(img,visit) # 一个框
             # 切分识别
-            height = box[1]-box[0]
-            width = box[3]-box[2]
-            if(height*width < 300): continue
+            height = box[1]-box[0]+1
+            width = box[3]-box[2]+1
+            if(height*width < 300):
+                while(not buf.empty()): buf.get()
+                continue # 排除掉很小的区域，肯定是噪点
             if(height > width):
                 bias = (height - width) >> 1
                 simple_img = numpy.zeros((height,height))
-                for i in range(height):
-                    for j in range(width):
-                        simple_img[i,j+bias] = 255-img[i+box[0],j+box[2]]
+                while(not buf.empty()):
+                    p = buf.get()
+                    simple_img[p[0]-box[0],p[1]-box[2]+bias] = 255-img[p[0],p[1]]
             else:
                 bias = (width - height) >> 1
                 simple_img = numpy.zeros((width, width))
-                for i in range(height):
-                    for j in range(width):
-                        simple_img[i+bias,j] = 255-img[i+box[0],j+box[2]]
+                while (not buf.empty()):
+                    p = buf.get()
+                    simple_img[p[0]-box[0]+bias, p[1]-box[2]] = 255-img[p[0], p[1]]
             #机器学习模型尝试
-            simple_img = cv2.resize(simple_img, (28, 28))
-            cv2.imwrite("./data/%s.jpg"%cnt,simple_img)
+            mnist_img = cv2.resize(simple_img, (28, 28))
+            cv2.imwrite("./data/%s.jpg"%cnt,mnist_img)
             cnt=cnt+1
-            mnist_img = numpy.zeros((28, 28))
-            for i in range(28):
-                for j in range(28):
-                    mnist_img[i, j] = simple_img[i, j] / 255
+            for ii in range(28):
+                for jj in range(28):
+                    mnist_img[ii, jj] = mnist_img[ii, jj] / 255
             mnist_array = numpy.reshape(mnist_img, (1, 784))
             mnist_array = mnist_array.astype(numpy.float32)
             result = tf.arg_max(y,1)  # 计算数字概率
             prob = tf.nn.softmax(y)
             cal_y = sess.run(prob, feed_dict={x: mnist_array})
             cal_re = sess.run(result, feed_dict={x: mnist_array})
+            if(cal_re[0]==5 or cal_re[0]==3): # 探查‘5’的笔画分离问题
+                if (height > width):
+                    for ii in range(height>>1):
+                        for jj in range(width):
+                            if(simple_img[ii,jj+bias] == img[ii+box[0],jj+box[2]] and visit[ii+box[0]][jj+box[2]]==0):
+                                for iii in range(height):
+                                    for jjj in range(width):
+                                        if(simple_img[iii,jjj+bias] == 255): buf.put((iii+box[0],jjj+box[2]))
+                                visit[ii+box[0]][jj+box[2]] = 1
+                                q.put((ii+box[0], jj+box[2]));
+                                expand = bfs(img,visit) # 一个框
+                                box0 = min(box[0],expand[0])
+                                box1 = max(box[1],expand[1])
+                                box2 = min(box[2],expand[2])
+                                box3 = max(box[3],expand[3])
+                                box = (box0,box1,box2,box3)
+                                height = box[1] - box[0]+1
+                                width = box[3] - box[2]+1
+                                if (height > width):
+                                    bias = (height - width) >> 1
+                                    simple_img = numpy.zeros((height, height))
+                                    while (not buf.empty()):
+                                        p = buf.get()
+                                        simple_img[p[0] - box[0], p[1] - box[2] + bias] = 255 - img[p[0], p[1]]
+                                else:
+                                    bias = (width - height) >> 1
+                                    simple_img = numpy.zeros((width, width))
+                                    while (not buf.empty()):
+                                        p = buf.get()
+                                        simple_img[p[0] - box[0] + bias, p[1] - box[2]] = 255 - img[p[0], p[1]]
+                else:
+                    for ii in range(height>>1):
+                        for jj in range(width):
+                            if(simple_img[ii+bias,jj] == img[ii+box[0],jj+box[2]] and visit[ii+box[0]][jj+box[2]]==0):
+                                for iii in range(height):
+                                    for jjj in range(width):
+                                        if(simple_img[iii+bias,jjj] == 255): buf.put((iii+box[0],jjj+box[2]))
+                                visit[ii+box[0]][jj+box[2]] = 1
+                                q.put((ii+box[0], jj+box[2]));
+                                expand = bfs(img,visit) # 一个框
+                                box[0] = min(box[0],expand[0])
+                                box[1] = max(box[1],expand[1])
+                                box[2] = min(box[2],expand[2])
+                                box[3] = max(box[3],expand[3])
+                                height = box[1] - box[0]+1
+                                width = box[3] - box[2]+1
+                                if (height > width):
+                                    bias = (height - width) >> 1
+                                    simple_img = numpy.zeros((height, height))
+                                    while (not buf.empty()):
+                                        p = buf.get()
+                                        simple_img[p[0] - box[0], p[1] - box[2] + bias] = 255 - img[p[0], p[1]]
+                                else:
+                                    bias = (width - height) >> 1
+                                    simple_img = numpy.zeros((width, width))
+                                    while (not buf.empty()):
+                                        p = buf.get()
+                                        simple_img[p[0] - box[0] + bias, p[1] - box[2]] = 255 - img[p[0], p[1]]
+                mnist_img = cv2.resize(simple_img, (28, 28))
+                cv2.imwrite("./data/%s.jpg" % cnt, mnist_img)
+                cnt = cnt + 1
+                for ii in range(28):
+                    for jj in range(28):
+                        mnist_img[ii, jj] = mnist_img[ii, jj] / 255
+                mnist_array = numpy.reshape(mnist_img, (1, 784))
+                mnist_array = mnist_array.astype(numpy.float32)
+                result = tf.arg_max(y, 1)  # 计算数字概率
+                prob = tf.nn.softmax(y)
+                cal_y = sess.run(prob, feed_dict={x: mnist_array})
+                cal_re = sess.run(result, feed_dict={x: mnist_array})
             # 画边框
             boxj = box[2]
             while (boxj <= box[3]):

@@ -90,7 +90,7 @@ def img_resize(img):
         simple_img = numpy.zeros((max_width, max_width))
         for i in range(max_height):
             for j in range(max_width):
-                simple_img[i,j+bias] = 255-img[i+max_x,j+max_y]
+                simple_img[i+bias,j] = 255-img[i+max_x,j+max_y]
     simple_img = cv2.resize(simple_img,(28,28))
     cv2.imwrite("1.jpg",simple_img)
     return simple_img
