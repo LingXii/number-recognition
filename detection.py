@@ -183,10 +183,10 @@ for j in range(img.shape[1]):# 广搜
                                 visit[ii+box[0]][jj+box[2]] = 1
                                 q.put((ii+box[0], jj+box[2]));
                                 expand = bfs(img,visit) # 一个框
-                                box[0] = min(box[0],expand[0])
-                                box[1] = max(box[1],expand[1])
-                                box[2] = min(box[2],expand[2])
-                                box[3] = max(box[3],expand[3])
+                                box0 = min(box[0], expand[0])
+                                box1 = max(box[1], expand[1])
+                                box2 = min(box[2], expand[2])
+                                box3 = max(box[3], expand[3])
                                 height = box[1] - box[0]+1
                                 width = box[3] - box[2]+1
                                 if (height > width):
