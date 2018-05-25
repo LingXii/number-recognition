@@ -52,24 +52,9 @@ def del_line(img):
     img = bfs(img,visit,line_width)
     img = cv2.medianBlur(img, 3)  # 去噪
     cv2.imwrite("temp.jpg",img)
-
-
-    # 生成两张图片
-    # black = img.copy()
-    # white = img.copy()
-    # for i in range(x_size):
-    #     for j in range(y_size):
-    #         if(img[i,j]==128):
-    #             black[i,j]=255
-    #             white[i,j]=128
-    #         else:
-    #             black[i,j]=0
-    #             white[i,j]=255
-    # cv2.imwrite("black.png", black)
-    # cv2.imwrite("white.png", white)
-    #
+    print("finish delete line")
     return img #返回一张图片，干扰线将用灰色（128）标出
 
-img = cv2.imread("4.jpg",0)
-del_line(img)
-print("finish delete line")
+# img = cv2.imread("4.jpg",0)
+# del_line(img)
+# print("finish delete line")
