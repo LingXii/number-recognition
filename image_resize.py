@@ -5,24 +5,10 @@ import queue
 import numpy
 
 # image deal
-global max_area #用于提取数字块的全局变量
-global max_width
-global max_height
-global max_x
-global max_y
-max_area = 0
-max_width = 0
-max_height = 0
-max_x = 0
-max_y = 0
 q = queue.Queue() # 广搜队列
+buf = queue.Queue() # 缓冲队列
 
 def bfs(img,vis):
-    global max_area
-    global max_width
-    global max_height
-    global max_x
-    global max_y
     x_size = img.shape[0]
     y_size = img.shape[1]
     first = q.get()
@@ -31,10 +17,9 @@ def bfs(img,vis):
     dowm_border = first[0]
     right_border = first[1]
     q.put(first)
-    count=0 #像素计数
     while(not q.empty()):
-        count=count+1
         p = q.get()
+        buf.put(p)  # 将广搜得到的像素点放入缓冲区，等待切分
         if(p[0]>dowm_border): dowm_border=p[0]
         if(p[1]>right_border): right_border=p[1]
         if(p[0]<up_border):
@@ -59,13 +44,8 @@ def bfs(img,vis):
         if (down[1] < y_size and vis[down[0]][down[1]] == 0 and img[down[0],down[1]]<30):
             q.put(down)
             vis[down[0]][down[1]] = 1
-    if(count > max_area):
-        max_area = count
-        max_width = right_border-left_border+1
-        max_height = dowm_border-up_border+1
-        max_x = first[0]
-        max_y = first[1]
-    return
+    return (up_border,dowm_border,left_border,right_border)
+
 
 def img_resize(img):
     img = cv2.adaptiveThreshold(img,255,cv2.ADAPTIVE_THRESH_MEAN_C, cv2.THRESH_BINARY,75,25) # 二值化
@@ -73,25 +53,34 @@ def img_resize(img):
     x_size = img.shape[0]
     y_size = img.shape[1]
     visit = [[0 for y in range(y_size)] for x in range(x_size)]
-    for i in range(img.shape[0]):# 广搜找最大块
-        for j in range(img.shape[1]):
+    cnt=0
+    for j in range(img.shape[1]):# 广搜
+        for i in range(img.shape[0]):
             if (visit[i][j]==0 and img[i, j] < 30):
                 visit[i][j]=1
                 q.put((i,j));
-                bfs(img,visit)
-    if(max_height > max_width):
-        bias = (max_height - max_width) >> 1
-        simple_img = numpy.zeros((max_height,max_height))
-        for i in range(max_height):
-            for j in range(max_width):
-                simple_img[i,j+bias] = 255-img[i+max_x,j+max_y]
-    else:
-        bias = (max_width - max_height) >> 1
-        simple_img = numpy.zeros((max_width, max_width))
-        for i in range(max_height):
-            for j in range(max_width):
-                simple_img[i+bias,j] = 255-img[i+max_x,j+max_y]
-    simple_img = cv2.resize(simple_img,(28,28))
-    cv2.imwrite("1.jpg",simple_img)
-    return simple_img
-    # print("finish resize")
+                box = bfs(img,visit) # 一个框
+                # 切分识别
+                height = box[1]-box[0]+1
+                width = box[3]-box[2]+1
+                if(height*width < 300):
+                    while(not buf.empty()): buf.get()
+                    continue # 排除掉很小的区域，肯定是噪点
+                if(height > width):
+                    bias = (height - width) >> 1
+                    simple_img = numpy.zeros((height,height))
+                    while(not buf.empty()):
+                        p = buf.get()
+                        simple_img[p[0]-box[0],p[1]-box[2]+bias] = 255-img[p[0],p[1]]
+                else:
+                    bias = (width - height) >> 1
+                    simple_img = numpy.zeros((width, width))
+                    while (not buf.empty()):
+                        p = buf.get()
+                        simple_img[p[0]-box[0]+bias, p[1]-box[2]] = 255-img[p[0], p[1]]
+                mnist_img = cv2.resize(simple_img, (28, 28))
+                cv2.imwrite("./data/%s.jpg"%cnt,mnist_img)
+                cnt=cnt+1
+
+img = cv2.imread("2.jpg",0)
+img_resize(img)
