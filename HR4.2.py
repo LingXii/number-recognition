@@ -143,6 +143,8 @@ datavis = tensorflowvisu.MnistDataVis(title4="batch-max conv activation", title5
 lr = 0.0001 +  tf.train.exponential_decay(0.02, iter, 1600, 1/math.e)
 train_step = tf.train.AdamOptimizer(lr).minimize(cross_entropy)
 
+saver = tf.train.Saver()
+
 # init
 init = tf.global_variables_initializer()
 sess = tf.Session()
@@ -177,6 +179,8 @@ def training_step(i, update_test_data, update_train_data):
     sess.run(update_ema, {X: batch_X, Y_: batch_Y, tst: False, iter: i, pkeep: 1.0,  pkeep_conv: 1.0})
 
 datavis.animate(training_step, 10001, train_data_update_freq=20, test_data_update_freq=100)
+
+saver.save('number-recognition-work/saved_model_4_2.ckpt')
 
 # to save the animation as a movie, add save_movie=True as an argument to datavis.animate
 # to disable the visualisation use the following line instead of the datavis.animate line
