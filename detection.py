@@ -4,6 +4,7 @@ import cv2
 import queue
 import numpy
 from pylab import *
+from delete_line import *
 import tensorflow as tf
 from tensorflow.examples.tutorials.mnist import input_data
 
@@ -61,16 +62,18 @@ buf = queue.Queue() # 缓冲队列
 
 def bfs(img,vis):
     x_size = img.shape[0]
-    y_size = img.shape[1]
+    y_size = 2060
     first = q.get()
     up_border = first[0]
     left_border = first[1]
     dowm_border = first[0]
     right_border = first[1]
+    count=0
     q.put(first)
     while(not q.empty()):
         p = q.get()
-        buf.put(p)  # 将广搜得到的像素点放入缓冲区，等待切分
+        buf.put(p)
+        count=count+1
         if(p[0]>dowm_border): dowm_border=p[0]
         if(p[1]>right_border): right_border=p[1]
         if(p[0]<up_border):
@@ -95,19 +98,24 @@ def bfs(img,vis):
         if (down[1] < y_size and vis[down[0]][down[1]] == 0 and img[down[0],down[1]]<30):
             q.put(down)
             vis[down[0]][down[1]] = 1
-    return (up_border,dowm_border,left_border,right_border)
+        if (left[0] >= 0 and vis[left[0]][left[1]] == 0 and img[left[0],left[1]]==128):
+            q.put(left)
+            vis[left[0]][left[1]] = 1
+        if (right[0] < x_size and vis[right[0]][right[1]] == 0 and img[right[0],right[1]]==128):
+            q.put(right)
+            vis[right[0]][right[1]] = 1
+    return (up_border,dowm_border,left_border,right_border,count)
 
 
-origin_img = cv2.imread("2.jpg")
-img = cv2.imread("2.jpg",0)
-img = cv2.adaptiveThreshold(img,255,cv2.ADAPTIVE_THRESH_MEAN_C, cv2.THRESH_BINARY,75,25) # 二值化
-img= cv2.medianBlur(img,3) # 去噪
+origin_img = cv2.imread("T9.jpg")
+img = cv2.imread("T9.jpg",0)
+img = del_line(img)
 x_size = img.shape[0]
-y_size = img.shape[1]
+y_size = 2060
 visit = [[0 for y in range(y_size)] for x in range(x_size)]
 cnt=0
-for j in range(img.shape[1]):# 广搜
-    for i in range(img.shape[0]):
+for j in range(425,2060):# 广搜
+    for i in range(550,img.shape[0]):
         if (visit[i][j]==0 and img[i, j] < 30):
             visit[i][j]=1
             q.put((i,j));
@@ -115,9 +123,12 @@ for j in range(img.shape[1]):# 广搜
             # 切分识别
             height = box[1]-box[0]+1
             width = box[3]-box[2]+1
-            if(height*width < 300):
-                while(not buf.empty()): buf.get()
-                continue # 排除掉很小的区域，肯定是噪点
+            if (height * width < 550):
+                while (not buf.empty()): buf.get()
+                continue  # 排除掉很小的区域，肯定是噪点
+            if (width > height / 3 and box[4] > (height * width) / 5 * 3):
+                while (not buf.empty()): buf.get()
+                continue  # 排除掉黑点占比很大的区域，肯定是污渍
             if(height > width):
                 bias = (height - width) >> 1
                 simple_img = numpy.zeros((height,height))
@@ -202,8 +213,8 @@ for j in range(img.shape[1]):# 广搜
                                         p = buf.get()
                                         simple_img[p[0] - box[0] + bias, p[1] - box[2]] = 255 - img[p[0], p[1]]
                 mnist_img = cv2.resize(simple_img, (28, 28))
-                cv2.imwrite("./data/%s.jpg" % cnt, mnist_img)
-                cnt = cnt + 1
+                # cv2.imwrite("./data/%s.jpg" % cnt, mnist_img)
+                # cnt = cnt + 1
                 for ii in range(28):
                     for jj in range(28):
                         mnist_img[ii, jj] = mnist_img[ii, jj] / 255
@@ -233,5 +244,5 @@ for j in range(img.shape[1]):# 广搜
             str = str + "%.5f"%cal_y[0][cal_re[0]]
             font = cv2.FONT_HERSHEY_SIMPLEX  # 使用默认字体
             origin_img = cv2.putText(origin_img, str, (box[3], box[1]), font, 0.8, 0, 2)
-cv2.imwrite("3.jpg",origin_img)
+cv2.imwrite("8.jpg",origin_img)
 print("finish detect")
