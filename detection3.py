@@ -11,6 +11,9 @@ import tensorflow as tf
 import tensorflowvisu
 import math
 from tensorflow.examples.tutorials.mnist import input_data as mnist_data
+from tkinter import *
+from tkinter.filedialog import askopenfilename
+from PIL import Image
 # mnist = input_data.read_data_sets("MNIST_data/", one_hot=True) # 获取数据集
 mnist = mnist_data.read_data_sets("data", one_hot=True, reshape=False, validation_size=0)
 tf.set_random_seed(0.0)
@@ -235,146 +238,54 @@ def bfs(img,vis):
             vis[right[0]][right[1]] = 1
     return (up_border,dowm_border,left_border,right_border,count)
 
-kernel = numpy.uint8(numpy.zeros((5, 5)))
-for x in range(5):
-    kernel[x, 2] = 1;
-    kernel[2, x] = 1;
-model_saver = tf.train.Saver() #模型的储存
-# for i in range(10001):
-#     if (i==0): continue
-#     if(i==10000): model_saver.save(sess,"./model/num_rec")
-#     if(i%100==0): print("training"+str(i//100)+"%")
-#     training_step(i,0,1)
-model_saver.restore(sess, "./model/saved_model4.ckpt")
-print("finish training")
-origin_img = cv2.imread("T9.jpg")
-img = cv2.imread("T9.jpg",0)
-img = del_line(img)
-x_size = img.shape[0]
-y_size = 2060
-visit = [[0 for y in range(y_size)] for x in range(x_size)]
-cnt=0
-for j in range(425,2060):# 广搜
-    for i in range(550,img.shape[0]):
-        if (visit[i][j]==0 and img[i, j] < 30):
-            visit[i][j]=1
-            q.put((i,j))
-            box = bfs(img,visit) # 一个框
-            # 切分识别
-            height = box[1]-box[0]+1
-            width = box[3]-box[2]+1
-            if(height*width < 550):
-                while(not buf.empty()): buf.get()
-                continue # 排除掉很小的区域，肯定是噪点
-            if(width>height/3 and box[4]>(height*width)/5*3):
-                while (not buf.empty()): buf.get()
-                continue  # 排除掉黑点占比很大的区域，肯定是污渍
-            if(height > width):
-                bias = (height - width) >> 1
-                simple_img = numpy.zeros((height,height))
-                while(not buf.empty()):
-                    p = buf.get()
-                    simple_img[p[0]-box[0],p[1]-box[2]+bias] = 255
-            else:
-                bias = (width - height) >> 1
-                simple_img = numpy.zeros((width, width))
-                while (not buf.empty()):
-                    p = buf.get()
-                    simple_img[p[0]-box[0]+bias, p[1]-box[2]] = 255
-            #机器学习模型尝试
-            if (simple_img.shape[0] > 300):
-                simple_img2 = cv2.dilate(simple_img, kernel)
-                simple_img2 = cv2.dilate(simple_img2, kernel)
-                simple_img2 = cv2.dilate(simple_img2, kernel)
-            elif (simple_img.shape[0] > 200):
-                simple_img2 = cv2.dilate(simple_img, kernel)
-                simple_img2 = cv2.dilate(simple_img2, kernel)
-            elif (simple_img.shape[0] > 100):
-                simple_img2 = cv2.dilate(simple_img, kernel)
-            else:
-                simple_img2 = simple_img.copy()
-            mnist_img = cv2.resize(simple_img2, (28, 28))
-            cv2.imwrite("./data/%s.jpg" % cnt, mnist_img)
-            cnt = cnt + 1
-            for ii in range(28):
-                for jj in range(28):
-                    mnist_img[ii, jj] = mnist_img[ii, jj] / 255
-            mnist_array = numpy.reshape(mnist_img, (1,28,28,1))
-            mnist_array = mnist_array.astype(numpy.float32)
-            result = tf.arg_max(Y,1)  # 计算数字概率
-            prob = tf.nn.softmax(Y)
-            cal_y = sess.run(prob, feed_dict={X: mnist_array, tst: True, pkeep: 1.0, pkeep_conv: 1.0})
-            cal_re = sess.run(result, feed_dict={X: mnist_array, tst: True, pkeep: 1.0, pkeep_conv: 1.0})
-
-            if(cal_re[0]==5 or cal_re[0]==3): # 探查‘5’的笔画分离问题
-                if (height > width):
-                    b=0
-                    for ii in range(height>>1):
-                        for jj in range(width):
-                            if(simple_img[ii,jj+bias] == img[ii+box[0],jj+box[2]] and visit[ii+box[0]][jj+box[2]]==0):
-                                for iii in range(height):
-                                    for jjj in range(width):
-                                        if(simple_img[iii,jjj+bias] == 255): buf.put((iii+box[0],jjj+box[2]))
-                                visit[ii+box[0]][jj+box[2]] = 1
-                                q.put((ii+box[0], jj+box[2]))
-                                expand = bfs(img,visit) # 一个框
-                                box0 = min(box[0],expand[0])
-                                box1 = max(box[1],expand[1])
-                                box2 = min(box[2],expand[2])
-                                box3 = max(box[3],expand[3])
-                                box = (box0,box1,box2,box3)
-                                height = box[1] - box[0]+1
-                                width = box[3] - box[2]+1
-                                if (height > width):
-                                    bias = (height - width) >> 1
-                                    simple_img = numpy.zeros((height, height))
-                                    while (not buf.empty()):
-                                        p = buf.get()
-                                        simple_img[p[0] - box[0], p[1] - box[2] + bias] = 255 - img[p[0], p[1]]
-                                    b=1
-                                else:
-                                    bias = (width - height) >> 1
-                                    simple_img = numpy.zeros((width, width))
-                                    while (not buf.empty()):
-                                        p = buf.get()
-                                        simple_img[p[0] - box[0] + bias, p[1] - box[2]] = 255 - img[p[0], p[1]]
-                                    b=1
-                            if(b==1): break
-                        if(b==1): break
+def detect(path):
+    kernel = numpy.uint8(numpy.zeros((5, 5)))
+    for x in range(5):
+        kernel[x, 2] = 1;
+        kernel[2, x] = 1;
+    model_saver = tf.train.Saver() #模型的储存
+    # for i in range(10001):
+    #     if (i==0): continue
+    #     if(i==10000): model_saver.save(sess,"./model/num_rec")
+    #     if(i%100==0): print("training"+str(i//100)+"%")
+    #     training_step(i,0,1)
+    model_saver.restore(sess, "./model/saved_model4.ckpt")
+    print("finish training")
+    origin_img = cv2.imread(path)
+    img = cv2.imread(path,0)
+    img = del_line(img)
+    x_size = img.shape[0]
+    y_size = 2060
+    visit = [[0 for y in range(y_size)] for x in range(x_size)]
+    cnt=0
+    for j in range(425,2060):# 广搜
+        for i in range(550,img.shape[0]):
+            if (visit[i][j]==0 and img[i, j] < 30):
+                visit[i][j]=1
+                q.put((i,j))
+                box = bfs(img,visit) # 一个框
+                # 切分识别
+                height = box[1]-box[0]+1
+                width = box[3]-box[2]+1
+                if(height*width < 550):
+                    while(not buf.empty()): buf.get()
+                    continue # 排除掉很小的区域，肯定是噪点
+                if(width>height/3 and box[4]>(height*width)/5*3):
+                    while (not buf.empty()): buf.get()
+                    continue  # 排除掉黑点占比很大的区域，肯定是污渍
+                if(height > width):
+                    bias = (height - width) >> 1
+                    simple_img = numpy.zeros((height,height))
+                    while(not buf.empty()):
+                        p = buf.get()
+                        simple_img[p[0]-box[0],p[1]-box[2]+bias] = 255
                 else:
-                    b = 0
-                    for ii in range(height>>1):
-                        for jj in range(width):
-                            if(simple_img[ii+bias,jj] == img[ii+box[0],jj+box[2]] and visit[ii+box[0]][jj+box[2]]==0):
-                                for iii in range(height):
-                                    for jjj in range(width):
-                                        if(simple_img[iii+bias,jjj] == 255): buf.put((iii+box[0],jjj+box[2]))
-                                visit[ii+box[0]][jj+box[2]] = 1
-                                q.put((ii+box[0], jj+box[2]))
-                                expand = bfs(img,visit) # 一个框
-                                box0 = min(box[0], expand[0])
-                                box1 = max(box[1], expand[1])
-                                box2 = min(box[2], expand[2])
-                                box3 = max(box[3], expand[3])
-                                box = (box0, box1, box2, box3)
-                                height = box[1] - box[0]+1
-                                width = box[3] - box[2]+1
-                                if (height > width):
-                                    bias = (height - width) >> 1
-                                    simple_img = numpy.zeros((height, height))
-                                    while (not buf.empty()):
-                                        p = buf.get()
-                                        simple_img[p[0] - box[0], p[1] - box[2] + bias] = 255 - img[p[0], p[1]]
-                                    b = 1
-                                else:
-                                    bias = (width - height) >> 1
-                                    simple_img = numpy.zeros((width, width))
-                                    while (not buf.empty()):
-                                        p = buf.get()
-                                        simple_img[p[0] - box[0] + bias, p[1] - box[2]] = 255 - img[p[0], p[1]]
-                                    b = 1
-                            if (b == 1): break
-                        if (b == 1): break
+                    bias = (width - height) >> 1
+                    simple_img = numpy.zeros((width, width))
+                    while (not buf.empty()):
+                        p = buf.get()
+                        simple_img[p[0]-box[0]+bias, p[1]-box[2]] = 255
+                #机器学习模型尝试
                 if (simple_img.shape[0] > 300):
                     simple_img2 = cv2.dilate(simple_img, kernel)
                     simple_img2 = cv2.dilate(simple_img2, kernel)
@@ -387,34 +298,143 @@ for j in range(425,2060):# 广搜
                 else:
                     simple_img2 = simple_img.copy()
                 mnist_img = cv2.resize(simple_img2, (28, 28))
+                cv2.imwrite("./data/%s.jpg" % cnt, mnist_img)
+                cnt = cnt + 1
                 for ii in range(28):
                     for jj in range(28):
                         mnist_img[ii, jj] = mnist_img[ii, jj] / 255
-                mnist_array = numpy.reshape(mnist_img, (1, 28, 28, 1))
+                mnist_array = numpy.reshape(mnist_img, (1,28,28,1))
                 mnist_array = mnist_array.astype(numpy.float32)
-                result = tf.arg_max(Y, 1)  # 计算数字概率
+                result = tf.arg_max(Y,1)  # 计算数字概率
                 prob = tf.nn.softmax(Y)
                 cal_y = sess.run(prob, feed_dict={X: mnist_array, tst: True, pkeep: 1.0, pkeep_conv: 1.0})
                 cal_re = sess.run(result, feed_dict={X: mnist_array, tst: True, pkeep: 1.0, pkeep_conv: 1.0})
-            # 画边框
-            boxj = box[2]
-            while (boxj <= box[3]):
-                origin_img[box[0], boxj] = (0, 0, 255)
-                origin_img[box[1], boxj] = (0, 0, 255)
-                origin_img[box[0] + 1, boxj] = (0, 0, 255)
-                origin_img[box[1] - 1, boxj] = (0, 0, 255)
-                boxj = boxj + 1
-            boxi = box[0]
-            while (boxi <= box[1]):
-                origin_img[boxi, box[2]] = (0, 0, 255)
-                origin_img[boxi, box[3]] = (0, 0, 255)
-                origin_img[boxi, box[2] + 1] = (0, 0, 255)
-                origin_img[boxi, box[3] - 1] = (0, 0, 255)
-                boxi = boxi + 1
-            #写数字
-            str = "%s:"%cal_re[0]
-            str = str + "%.5f"%cal_y[0][cal_re[0]]
-            font = cv2.FONT_HERSHEY_SIMPLEX  # 使用默认字体
-            origin_img = cv2.putText(origin_img, str, (box[3], box[1]), font, 0.8, 0, 2)
-cv2.imwrite("7.jpg",origin_img)
-print("finish detect")
+
+                if(cal_re[0]==5 or cal_re[0]==3): # 探查‘5’的笔画分离问题
+                    if (height > width):
+                        b=0
+                        for ii in range(height>>1):
+                            for jj in range(width):
+                                if(simple_img[ii,jj+bias] == img[ii+box[0],jj+box[2]] and visit[ii+box[0]][jj+box[2]]==0):
+                                    for iii in range(height):
+                                        for jjj in range(width):
+                                            if(simple_img[iii,jjj+bias] == 255): buf.put((iii+box[0],jjj+box[2]))
+                                    visit[ii+box[0]][jj+box[2]] = 1
+                                    q.put((ii+box[0], jj+box[2]))
+                                    expand = bfs(img,visit) # 一个框
+                                    box0 = min(box[0],expand[0])
+                                    box1 = max(box[1],expand[1])
+                                    box2 = min(box[2],expand[2])
+                                    box3 = max(box[3],expand[3])
+                                    box = (box0,box1,box2,box3)
+                                    height = box[1] - box[0]+1
+                                    width = box[3] - box[2]+1
+                                    if (height > width):
+                                        bias = (height - width) >> 1
+                                        simple_img = numpy.zeros((height, height))
+                                        while (not buf.empty()):
+                                            p = buf.get()
+                                            simple_img[p[0] - box[0], p[1] - box[2] + bias] = 255 - img[p[0], p[1]]
+                                        b=1
+                                    else:
+                                        bias = (width - height) >> 1
+                                        simple_img = numpy.zeros((width, width))
+                                        while (not buf.empty()):
+                                            p = buf.get()
+                                            simple_img[p[0] - box[0] + bias, p[1] - box[2]] = 255 - img[p[0], p[1]]
+                                        b=1
+                                if(b==1): break
+                            if(b==1): break
+                    else:
+                        b = 0
+                        for ii in range(height>>1):
+                            for jj in range(width):
+                                if(simple_img[ii+bias,jj] == img[ii+box[0],jj+box[2]] and visit[ii+box[0]][jj+box[2]]==0):
+                                    for iii in range(height):
+                                        for jjj in range(width):
+                                            if(simple_img[iii+bias,jjj] == 255): buf.put((iii+box[0],jjj+box[2]))
+                                    visit[ii+box[0]][jj+box[2]] = 1
+                                    q.put((ii+box[0], jj+box[2]))
+                                    expand = bfs(img,visit) # 一个框
+                                    box0 = min(box[0], expand[0])
+                                    box1 = max(box[1], expand[1])
+                                    box2 = min(box[2], expand[2])
+                                    box3 = max(box[3], expand[3])
+                                    box = (box0, box1, box2, box3)
+                                    height = box[1] - box[0]+1
+                                    width = box[3] - box[2]+1
+                                    if (height > width):
+                                        bias = (height - width) >> 1
+                                        simple_img = numpy.zeros((height, height))
+                                        while (not buf.empty()):
+                                            p = buf.get()
+                                            simple_img[p[0] - box[0], p[1] - box[2] + bias] = 255 - img[p[0], p[1]]
+                                        b = 1
+                                    else:
+                                        bias = (width - height) >> 1
+                                        simple_img = numpy.zeros((width, width))
+                                        while (not buf.empty()):
+                                            p = buf.get()
+                                            simple_img[p[0] - box[0] + bias, p[1] - box[2]] = 255 - img[p[0], p[1]]
+                                        b = 1
+                                if (b == 1): break
+                            if (b == 1): break
+                    if (simple_img.shape[0] > 300):
+                        simple_img2 = cv2.dilate(simple_img, kernel)
+                        simple_img2 = cv2.dilate(simple_img2, kernel)
+                        simple_img2 = cv2.dilate(simple_img2, kernel)
+                    elif (simple_img.shape[0] > 200):
+                        simple_img2 = cv2.dilate(simple_img, kernel)
+                        simple_img2 = cv2.dilate(simple_img2, kernel)
+                    elif (simple_img.shape[0] > 100):
+                        simple_img2 = cv2.dilate(simple_img, kernel)
+                    else:
+                        simple_img2 = simple_img.copy()
+                    mnist_img = cv2.resize(simple_img2, (28, 28))
+                    for ii in range(28):
+                        for jj in range(28):
+                            mnist_img[ii, jj] = mnist_img[ii, jj] / 255
+                    mnist_array = numpy.reshape(mnist_img, (1, 28, 28, 1))
+                    mnist_array = mnist_array.astype(numpy.float32)
+                    result = tf.arg_max(Y, 1)  # 计算数字概率
+                    prob = tf.nn.softmax(Y)
+                    cal_y = sess.run(prob, feed_dict={X: mnist_array, tst: True, pkeep: 1.0, pkeep_conv: 1.0})
+                    cal_re = sess.run(result, feed_dict={X: mnist_array, tst: True, pkeep: 1.0, pkeep_conv: 1.0})
+                # 画边框
+                boxj = box[2]
+                while (boxj <= box[3]):
+                    origin_img[box[0], boxj] = (0, 0, 255)
+                    origin_img[box[1], boxj] = (0, 0, 255)
+                    origin_img[box[0] + 1, boxj] = (0, 0, 255)
+                    origin_img[box[1] - 1, boxj] = (0, 0, 255)
+                    boxj = boxj + 1
+                boxi = box[0]
+                while (boxi <= box[1]):
+                    origin_img[boxi, box[2]] = (0, 0, 255)
+                    origin_img[boxi, box[3]] = (0, 0, 255)
+                    origin_img[boxi, box[2] + 1] = (0, 0, 255)
+                    origin_img[boxi, box[3] - 1] = (0, 0, 255)
+                    boxi = boxi + 1
+                #写数字
+                str = "%s:"%cal_re[0]
+                str = str + "%.5f"%cal_y[0][cal_re[0]]
+                font = cv2.FONT_HERSHEY_SIMPLEX  # 使用默认字体
+                origin_img = cv2.putText(origin_img, str, (box[3], box[1]), font, 0.8, 0, 2)
+    cv2.imwrite("result.jpg",origin_img)
+    im = Image.open('result.jpg')
+    im.show()
+    print("finish detect")
+
+def selectPath():
+    path_ = askopenfilename()
+    path.set(path_)
+    detect(path_)
+
+root = Tk()
+path = StringVar()
+
+Label(root,text = "目标路径:").grid(row = 0, column = 0)
+Entry(root, textvariable = path).grid(row = 0, column = 1)
+Button(root, text = "选择图片", command = selectPath).grid(row = 0, column = 2)
+
+root.mainloop()
