@@ -3,7 +3,6 @@ from PIL import Image
 #import numpy
 
 def vertical(img):
-    """传入二值化后的图片进行垂直投影"""
     pixdata = img.load()
     w,h = img.size
     result = []
@@ -15,22 +14,16 @@ def vertical(img):
         result.append(black)
     return result
 
-def get_start_x(hist_width):
-    """根据图片垂直投影的结果来确定起点
-       hist_width中间值 前后取4个值 再这范围内取最小值
-    """
-    mid = len(hist_width) // 2 # 注意py3 除法和py2不同
-    temp = hist_width[mid-4:mid+5]
+def get_start_x(hist_width,r):
+    mid = len(hist_width) // 2
+    temp = hist_width[mid-r:mid+r]
     return mid - 4 + temp.index(min(temp))
 
-
-if __name__ == '__main__':
-    p = Image.open("5.jpg")
-    p = p.resize((28, 28), Image.ANTIALIAS)
-
+def cut_num(path):
+    p = Image.open(path)
+    w,h = p.size
+    r=w//8
     width_ = vertical(p)
-    border = get_start_x(width_)
-    cuts = [(0,0,border,28),(border,0,28,28)]
-    for i,n in enumerate(cuts,1):
-        tmp = p.crop(n)
-        tmp.save("7better_cut_short%s.png"%i)
+    border = get_start_x(width_,r)
+    return border
+
